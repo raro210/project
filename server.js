@@ -10,17 +10,10 @@ const app = express();
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      try {
-        const u = new URL(origin);
-        const host = u.hostname;
-        if (origin === 'http://localhost:3000') return callback(null, true);
-        if (host.endsWith('netlify.app')) return callback(null, true);
-      } catch {}
-      return callback(new Error('Not allowed by CORS'), false);
-    },
+    origin: true,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
