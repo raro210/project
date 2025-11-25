@@ -21,7 +21,7 @@ const findUserByEmail = async (email) => {
 // ID로 사용자 프로필 조회 (토큰 검증 후 사용)
 const findUserById = async (userId) => {
     const query = `
-        SELECT id, email, nickname, real_name, tags, bio, gender, birth_date, profile_image_url, photo_status
+        SELECT id, email, nickname, real_name, tags, bio, gender, birth_date, profile_image_url, photo_status, major_id, mbti
         FROM users 
         WHERE id = ?
     `;

@@ -1,6 +1,5 @@
 // src/controllers/matchController.js
 const matchModel = require('../models/matchModel');
-// 💡 userModel에서 필요한 함수(findUserById)만 명시적으로 구조 분해 할당하여 가져옵니다.
 const { findUserById } = require('../models/userModel'); 
 
 /**
@@ -29,6 +28,40 @@ async function getCandidates(req, res) {
     } catch (error) {
         console.error('후보 조회 중 서버 오류 발생:', error);
         res.status(500).json({ message: '서버 오류로 인해 후보 조회에 실패했습니다.' });
+    }
+}
+
+// GET /api/matches/top3 - 태그 일치 점수 상위 3명
+async function getTop3(req, res) {
+    const userId = req.user.id;
+    try {
+        const currentUser = await findUserById(userId);
+        if (!currentUser) {
+            return res.status(404).json({ message: '사용자 정보를 찾을 수 없습니다.' });
+        }
+        const top3 = await matchModel.getTopMatchesByTagScore(userId, currentUser.tags, 3);
+        res.status(200).json(top3);
+    } catch (error) {
+        console.error('Top3 매칭 조회 오류:', error);
+        res.status(500).json({ message: '매칭 점수 계산 중 오류가 발생했습니다.' });
+    }
+}
+
+// POST /api/matches/score - 선택한 태그 기반 점수 계산 리스트
+async function scoreByTags(req, res) {
+    const userId = req.user.id;
+    const { tags, limit } = req.body || {};
+    try {
+        let baseTags = Array.isArray(tags) ? tags.join(',') : (tags || '');
+        if (!baseTags) {
+            const me = await findUserById(userId);
+            baseTags = me?.tags || '';
+        }
+        const result = await matchModel.getTopMatchesByTagScore(userId, baseTags, limit || 20);
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('태그 점수 계산 오류:', error);
+        res.status(500).json({ message: '태그 점수 계산 중 오류가 발생했습니다.' });
     }
 }
 
@@ -72,5 +105,7 @@ async function swipe(req, res) {
 
 module.exports = {
     getCandidates,
+    getTop3,
+    scoreByTags,
     swipe,
 };

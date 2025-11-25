@@ -1,5 +1,6 @@
 // src/controllers/postController.js
 const postModel = require('../models/postModel');
+const dbPool = require('../config/db');   // 🔥 이 줄 추가
 
 // 1. 새 게시물 생성 (POST /api/posts)
 const create = async (req, res) => {
@@ -20,15 +21,25 @@ const create = async (req, res) => {
 };
 
 // 2. 게시물 목록 조회 (GET /api/posts)
+// 2. 게시물 목록 조회 (GET /api/posts)
 const getPosts = async (req, res) => {
-    try {
-        const posts = await postModel.getLatestPosts(5); // 최신 5개
-        res.status(200).json(posts);
-    } catch (error) {
-        console.error('게시물 조회 오류:', error);
-        res.status(500).json({ message: '게시물 조회에 실패했습니다.' });
-    }
+  try {
+    // 🔥 일단 테이블에서 전부 다 가져오는 심플 버전
+    const [rows] = await dbPool.query('SELECT * FROM posts ORDER BY created_at DESC');
+
+    return res.status(200).json(rows);
+  } catch (error) {
+    console.error('게시물 조회 오류:', error.message);
+    console.error(error);
+
+    return res.status(500).json({
+      message: '게시물 조회에 실패했습니다.',
+      error: error.message,      // 🔥 에러 내용도 같이 보내기
+    });
+  }
 };
+
+
 
 // 3. 특정 게시물 조회 (GET /api/posts/:postId)
 const getPost = async (req, res) => {

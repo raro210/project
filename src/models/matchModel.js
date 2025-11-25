@@ -1,54 +1,28 @@
 const dbPool = require('../config/db');
 
 /**
- * 나에게 아직 노출되지 않았거나 내가 아직 스와이프하지 않은 후보 목록을 조회합니다.
+ * 아직 스와이프하지 않은 후보 목록을 최신 등록 순으로 조회합니다.
  */
 const getCandidates = async (userId, userGender, limit = 10) => {
-    // 1. 현재 사용자 정보 가져오기 (태그 정보를 위해)
-    const currentUser = await findUserById(userId); 
-    // ... (나머지 로직 유지) ...
-
-    let tagPriorityClause = '';
-    const queryValues = [targetGender, userId, userId, limitInt];
-
-    // 💡 태그 일치 우선순위 로직 추가
-    if (currentUser && currentUser.tags) {
-        const userTags = currentUser.tags.split(',').map(tag => tag.trim());
-        
-        // 쿼리에 태그 일치 여부 확인 로직을 추가
-        if (userTags.length > 0) {
-             // 쿼리에서 LIKE 검색을 사용해 태그 우선순위를 부여합니다.
-             // (쉼표로 구분된 문자열에서 태그 하나라도 일치하면 높은 순위 부여)
-             tagPriorityClause = userTags.map(tag => `
-                 (u.tags LIKE '%${tag}%')
-             `).join(' OR ');
-             
-             tagPriorityClause = `CASE WHEN ${tagPriorityClause} THEN 0 ELSE 1 END,`;
-        }
-    }
-
+    const limitInt = Number.isFinite(parseInt(limit, 10)) ? parseInt(limit, 10) : 10;
 
     const query = `
         SELECT 
-            u.id, u.email, u.nickname, u.gender, u.birth_date, u.bio, u.profile_image_url
+            u.id, u.email, u.nickname, u.gender, u.birth_date, u.bio, u.profile_image_url, u.tags
         FROM 
             users u
         WHERE 
-            u.gender = ?
-            AND u.id != ?
+            u.id != ?
             AND u.id NOT IN (
                 SELECT user_id_target 
                 FROM matches 
                 WHERE user_id_swiper = ?
             )
-        ORDER BY
-            ${tagPriorityClause}        <-- 👈 태그 우선 순위 적용
-            u.created_at DESC         
-        LIMIT ${limitInt}
+        ORDER BY u.created_at DESC
+        LIMIT ?
     `;
 
-    // 쿼리 실행
-    const [rows] = await dbPool.execute(query, [targetGender, userId, userId]);
+    const [rows] = await dbPool.execute(query, [userId, userId, limitInt]);
     return rows;
 };
 
@@ -93,7 +67,42 @@ const recordSwipeAndCheckMatch = async (swiperId, targetId, direction) => {
     return { isMatch };
 };
 
+/**
+ * 현재 사용자 기준 태그 일치 점수를 계산하여 상위 N명을 반환합니다.
+ * 점수 = 일치 태그 개수 × 10
+ */
+const getTopMatchesByTagScore = async (userId, userTags, limit = 3) => {
+    const query = `
+        SELECT u.id, u.nickname, u.bio, u.profile_image_url, u.tags
+        FROM users u
+        WHERE u.id != ?
+    `;
+    const [rows] = await dbPool.execute(query, [userId]);
+
+    const baseTags = (userTags || '')
+        .split(',')
+        .map(t => t.trim())
+        .filter(Boolean);
+
+    const scored = rows.map(r => {
+        const otherTags = (r.tags || '')
+            .split(',')
+            .map(t => t.trim())
+            .filter(Boolean);
+        const set = new Set(otherTags);
+        let matches = 0;
+        for (const t of baseTags) {
+            if (set.has(t)) matches += 1;
+        }
+        return { ...r, match_score: matches * 10 };
+    });
+
+    scored.sort((a, b) => b.match_score - a.match_score);
+    return scored.slice(0, Number.isFinite(parseInt(limit, 10)) ? parseInt(limit, 10) : 3);
+};
+
 module.exports = {
     getCandidates,
     recordSwipeAndCheckMatch,
+    getTopMatchesByTagScore,
 };
